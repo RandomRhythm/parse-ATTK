@@ -1,4 +1,5 @@
 'ATTK Parser by Ryan Boyle randomrhythm@rhythmengineering.com
+'v 3.0.2 - Support ATTK for Linux output parsing
 'v 3.0.1 - Public version published
 'v 3.0.0 - CSV output support for multi output processing (doesn't rewrite the header row). Condense the data by hash value and only provide an example of the file path. If prevalence is not provided via ATTK output then its tracked via dict.
 'v 2.8.8 - CSV output.
@@ -91,7 +92,7 @@ if strFlashVersion = "" then strFlashVersion = strStaticFPversion
 Set f = objFSO.GetFolder(CurrentDirectory)
 Set fc = f.SubFolders
 For Each f1 in fc
-    if objFSO.FileExists(CurrentDirectory & "\" & f1.name & strLogSubPath & "\scanreport.xml") then
+    if objFSO.FileExists(CurrentDirectory & "\" & f1.name & strLogSubPath & "\scanreport.xml") = True or objFSO.FileExists(CurrentDirectory & "\" & f1.name & "\log" & "\scanreport.xml") = True then
       BoolMultiReporting = True
       exit for
     end if
@@ -123,7 +124,12 @@ else
       strFolderPath = CurrentDirectory & "\" & f1.name & strLogSubPath & "\"
       strFile = strFolderPath & "\scanreport.xml"
       ParseATTKReports boolWriteHeader
-	  boolWriteHeader = False
+      boolWriteHeader = False
+    elseif objFSO.FileExists(CurrentDirectory & "\" & f1.name & "\log" & "\scanreport.xml") then
+      strFolderPath = CurrentDirectory & "\" & f1.name & "\log\"
+      strFile = strFolderPath & "\scanreport.xml"
+      ParseATTKReports boolWriteHeader
+      boolWriteHeader = False    
     end if
   Next
 
@@ -255,7 +261,7 @@ BoolProcessAutoruns = False
 BoolProcessFiles = False
 'msgbox "parsing " & strFile
 if objFSO.fileexists(strFile) then
-  strSSrow = "SHA1|MD5|Path|Version|" & "Publisher|" & "Company|" & "Product|Logical Size|CB Prevalence|Maturity|Census"
+  strSSrow = "SHA1|MD5|Path|Version|" & "Publisher|" & "Company|" & "Product|Logical Size|Prevalence|Maturity|Census"
   strTmpSSlout = chr(34) & replace(strSSrow, "|",chr(34) & "," & Chr(34)) & chr(34)
   if boolWriteHeaderRow = True then logdata currentdirectory & "\FileOut.csv", strTmpSSlout, False
   Set objFile = objFSO.OpenTextFile(strFile)
@@ -266,6 +272,8 @@ if objFSO.fileexists(strFile) then
         on error goto 0
         if instr(strData, "<ComputerName>") then
           strTmpCompName = GetData(strData,"<", "<ComputerName>")
+        elseif instr(strData, "</ComputerName>") Then 'ATTK for Linux
+          strTmpCompName = rGetData(strData,">", "</ComputerName>")
         elseif instr(strData, "<Major>") then
           intWinMajor = GetData(strData,"<", "<Major>")
           if isnumeric(intWinMajor) then intWinMajor = int(intWinMajor)
@@ -902,3 +910,20 @@ Function IsHash(TestString)
     End If
     
 End Function
+
+Function rGetData(contents, ByVal EndOfStringChar, ByVal MatchString)
+MatchStringLength = Len(MatchString)
+x= instrRev(contents, MatchString) -1
+  if X >0 then
+    if instrRev(left(contents, x),EndOfStringChar) > 0 then
+      rGetData = Mid(contents, instrRev(left(contents, x),EndOfStringChar) +len(EndOfStringChar),x - instrRev(left(contents, x),EndOfStringChar) -len(EndOfStringChar) +1)
+      exit function
+    else
+      rGetData = left(contents,x)
+      'msgbox "failed match:" & left(contents,x -1)
+      exit function
+    end if
+    
+  end if
+rGetData = ""
+end Function
